@@ -124,11 +124,36 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
                   setCurrentLocation(locationData);
                   setIsLocationLoaded(true);
                 } catch (e) {
-                  setShowLocationModal(true);
+                  // Use default location (New Delhi, India)
+                  const defaultLocation: LocationData = {
+                    latitude: 28.6139,
+                    longitude: 77.2090,
+                    city: 'New Delhi',
+                    state: 'Delhi',
+                    country: 'India',
+                    isManual: true,
+                    timestamp: Date.now()
+                  };
+                  console.log('📍 LocationContext: Using default location (New Delhi)');
+                  setCurrentLocation(defaultLocation);
+                  setIsLocationLoaded(true);
+                  localStorage.setItem('alertaid-location', JSON.stringify(defaultLocation));
                 }
               } else {
-                // Show location modal for manual input
-                setShowLocationModal(true);
+                // Use default location (New Delhi, India) instead of showing modal
+                const defaultLocation: LocationData = {
+                  latitude: 28.6139,
+                  longitude: 77.2090,
+                  city: 'New Delhi',
+                  state: 'Delhi',
+                  country: 'India',
+                  isManual: true,
+                  timestamp: Date.now()
+                };
+                console.log('📍 LocationContext: Using default location (New Delhi)');
+                setCurrentLocation(defaultLocation);
+                setIsLocationLoaded(true);
+                localStorage.setItem('alertaid-location', JSON.stringify(defaultLocation));
               }
             },
             {
@@ -138,7 +163,7 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
             }
           );
         } else {
-          // Browser doesn't support geolocation
+          // Browser doesn't support geolocation - use default location
           console.warn('⚠️ Geolocation not supported');
           
           if (savedLocation) {
@@ -146,12 +171,38 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
             setCurrentLocation(locationData);
             setIsLocationLoaded(true);
           } else {
-            setShowLocationModal(true);
+            // Use default location (New Delhi, India)
+            const defaultLocation: LocationData = {
+              latitude: 28.6139,
+              longitude: 77.2090,
+              city: 'New Delhi',
+              state: 'Delhi',
+              country: 'India',
+              isManual: true,
+              timestamp: Date.now()
+            };
+            console.log('📍 LocationContext: Using default location (New Delhi)');
+            setCurrentLocation(defaultLocation);
+            setIsLocationLoaded(true);
+            localStorage.setItem('alertaid-location', JSON.stringify(defaultLocation));
           }
         }
       } catch (error) {
         console.error('Error in location initialization:', error);
-        setShowLocationModal(true);
+        // Use default location on error instead of showing modal
+        const defaultLocation: LocationData = {
+          latitude: 28.6139,
+          longitude: 77.2090,
+          city: 'New Delhi',
+          state: 'Delhi',
+          country: 'India',
+          isManual: true,
+          timestamp: Date.now()
+        };
+        console.log('📍 LocationContext: Using default location due to error');
+        setCurrentLocation(defaultLocation);
+        setIsLocationLoaded(true);
+        localStorage.setItem('alertaid-location', JSON.stringify(defaultLocation));
       }
     };
 

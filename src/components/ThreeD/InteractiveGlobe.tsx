@@ -170,13 +170,21 @@ const InteractiveGlobe: React.FC<InteractiveGlobeProps> = ({
 }) => {
   const globeRef = useRef<any>(null);
   const [isClient, setIsClient] = useState(false);
+  const [globeReady, setGlobeReady] = useState(false);
   const { currentLocation } = useLocation();
   const [riskPoints, setRiskPoints] = useState<RiskPoint[]>([]);
   const [autoRotate, setAutoRotate] = useState(true);
 
+  // Default location if none available (New Delhi, India)
+  const defaultLocation = { latitude: 28.6139, longitude: 77.2090 };
+  const displayLocation = currentLocation || defaultLocation;
+
   // Only render Globe on client side (not during SSR)
   useEffect(() => {
     setIsClient(true);
+    // Give Globe time to initialize
+    const timer = setTimeout(() => setGlobeReady(true), 500);
+    return () => clearTimeout(timer);
   }, []);
 
   useEffect(() => {
@@ -210,18 +218,18 @@ const InteractiveGlobe: React.FC<InteractiveGlobeProps> = ({
   }, [alerts, currentLocation]);
 
   useEffect(() => {
-    // Auto-rotate to user location
-    if (globeRef.current && currentLocation) {
+    // Auto-rotate to user location (or default location)
+    if (globeRef.current && globeReady) {
       globeRef.current.pointOfView(
         {
-          lat: currentLocation.latitude,
-          lng: currentLocation.longitude,
+          lat: displayLocation.latitude,
+          lng: displayLocation.longitude,
           altitude: 2.5
         },
         1500
       );
     }
-  }, [currentLocation]);
+  }, [displayLocation, globeReady]);
 
   const getSizeForSeverity = (severity: string): number => {
     switch (severity) {
@@ -242,11 +250,11 @@ const InteractiveGlobe: React.FC<InteractiveGlobeProps> = ({
   };
 
   const resetView = () => {
-    if (globeRef.current && currentLocation) {
+    if (globeRef.current) {
       globeRef.current.pointOfView(
         {
-          lat: currentLocation.latitude,
-          lng: currentLocation.longitude,
+          lat: displayLocation.latitude,
+          lng: displayLocation.longitude,
           altitude: 2.5
         },
         1000
