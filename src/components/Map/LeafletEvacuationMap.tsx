@@ -57,8 +57,7 @@ const spin = keyframes`
 const MapWrapper = styled.div`
   display: flex;
   flex-direction: column;
-  height: 100%;
-  min-height: 500px;
+  height: 550px;
   background: #0f172a;
   border-radius: 12px;
   overflow: hidden;

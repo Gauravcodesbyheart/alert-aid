@@ -13,7 +13,6 @@ import MLPredictionAccuracy from './MLPredictionAccuracy';
 import ActionButtons from './ActionButtons';
 import SevenDayForecast from './SevenDayForecast';
 import AIMLSummary from './AIMLSummary';
-import MultiHazardPanel from './MultiHazardPanel';
 import GeolocationManager from '../Location/GeolocationManager';
 import EmergencyResponsePanel from '../Emergency/EmergencyResponsePanel';
 import EvacuationSafetyModule from '../Safety/EvacuationSafetyModule';
@@ -21,7 +20,6 @@ import ResourceManagementDashboard from '../Resources/ResourceManagementDashboar
 import CommunicationHub from '../Communication/CommunicationHub';
 import EnhancedWeatherWidget from '../Dashboard/EnhancedWeatherWidget';
 import AirQualityWidget from './AirQualityWidget';
-import LeafletFloodMap from '../Map/LeafletFloodMap';
 import { SystemDiagnostics } from '../Diagnostics/SystemDiagnostics';
 import { LoadingOverlay, SkeletonDashboard } from '../Layout/LoadingStates';
 import { useAutoRefresh, useRefreshSettings } from '../../hooks/useAutoRefresh';
@@ -100,8 +98,6 @@ const DashboardGrid = styled.div`
     grid-template-columns: 380px 1fr 380px; /* Fixed 380px sidebars, flexible center */
     grid-template-areas:
       "left center right"
-      "hazards hazards hazards"
-      "floodmap floodmap floodmap"
       "weather weather weather"
       "diagnostics diagnostics diagnostics"
       "emergency emergency emergency"
@@ -117,8 +113,6 @@ const DashboardGrid = styled.div`
     grid-template-areas:
       "left center"
       "right center"
-      "hazards hazards"
-      "floodmap floodmap"
       "weather weather"
       "diagnostics diagnostics"
       "emergency emergency"
@@ -133,8 +127,6 @@ const DashboardGrid = styled.div`
     grid-template-columns: 1fr;
     grid-template-areas:
       "center"
-      "hazards"
-      "floodmap"
       "weather"
       "diagnostics"
       "left"
@@ -277,14 +269,6 @@ const WeatherSection = styled.section`
 
 const DiagnosticsSection = styled.section`
   grid-area: diagnostics;
-`;
-
-const HazardsSection = styled.section`
-  grid-area: hazards;
-`;
-
-const FloodMapSection = styled.section`
-  grid-area: floodmap;
 `;
 
 // Live Data Status Bar
@@ -640,31 +624,6 @@ const Dashboard: React.FC = () => {
             </ErrorBoundary>
           </DashboardCard>
         </RightSidebar>
-
-        {/* Multi-Hazard Risk Assessment - Full Width */}
-        <HazardsSection>
-          <DashboardCard animationDelay={300}>
-            <ErrorBoundary componentName="Multi-Hazard Risk">
-              <MultiHazardPanel 
-                latitude={currentLocation?.latitude || 28.6139}
-                longitude={currentLocation?.longitude || 77.2090}
-                cityName={currentLocation?.city || 'New Delhi'}
-              />
-            </ErrorBoundary>
-          </DashboardCard>
-        </HazardsSection>
-
-        {/* Flood Risk Map - Full Width */}
-        <FloodMapSection>
-          <DashboardCard animationDelay={350}>
-            <ErrorBoundary componentName="Flood Risk Map">
-              <LeafletFloodMap 
-                center={[currentLocation?.latitude || 28.6139, currentLocation?.longitude || 77.2090]}
-                zoom={12}
-              />
-            </ErrorBoundary>
-          </DashboardCard>
-        </FloodMapSection>
 
         {/* Weather Dashboard - Full Width with Enhanced Widget */}
         <WeatherSection>

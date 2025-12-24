@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import styled, { keyframes } from 'styled-components';
+import styled, { keyframes, css } from 'styled-components';
 import { AlertTriangle, TrendingUp, Activity, BarChart3, MapPin, Brain, Cpu, Zap, Shield, History, Clock } from 'lucide-react';
 import { productionColors, productionCard } from '../styles/production-ui-system';
 import UnifiedAIMLPanel from '../components/Dashboard/UnifiedAIMLPanel';
-import FloodRiskMap from '../components/Map/FloodRiskMap';
 import LeafletFloodMap from '../components/Map/LeafletFloodMap';
 import RealTimeWeatherWidget from '../components/Dashboard/RealTimeWeatherWidget';
 import MultiHazardPanel from '../components/Dashboard/MultiHazardPanel';
@@ -12,6 +11,70 @@ import EmergencySOS from '../components/Emergency/EmergencySOS';
 import EvacuationRoute from '../components/Emergency/EvacuationRoute';
 import { useLocation } from '../contexts/LocationContext';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, AreaChart, Area } from 'recharts';
+
+// Enhanced Animations
+const fadeInUp = keyframes`
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+`;
+
+const fadeInLeft = keyframes`
+  from {
+    opacity: 0;
+    transform: translateX(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+`;
+
+const fadeInRight = keyframes`
+  from {
+    opacity: 0;
+    transform: translateX(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+`;
+
+const scaleIn = keyframes`
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+`;
+
+const pulseGlow = keyframes`
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(99, 102, 241, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 40px rgba(99, 102, 241, 0.6), 0 0 60px rgba(99, 102, 241, 0.3);
+  }
+`;
+
+const shimmer = keyframes`
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+`;
+
+const float = keyframes`
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+`;
 
 const PredictionsContainer = styled.div`
   min-height: 100vh;
@@ -25,12 +88,15 @@ const PredictionsContainer = styled.div`
 const PageHeader = styled.div`
   max-width: 1200px;
   margin: 0 auto 48px;
+  animation: ${fadeInUp} 0.6s ease-out;
 `;
 
 const PageTitle = styled.h1`
   font-size: 48px;
   font-weight: 800;
-  background: linear-gradient(135deg, ${productionColors.brand.primary}, ${productionColors.brand.secondary});
+  background: linear-gradient(135deg, ${productionColors.brand.primary}, ${productionColors.brand.secondary}, #f59e0b);
+  background-size: 200% 200%;
+  animation: ${shimmer} 3s ease-in-out infinite;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   margin-bottom: 16px;
@@ -40,6 +106,7 @@ const PageDescription = styled.p`
   font-size: 18px;
   color: ${productionColors.text.secondary};
   max-width: 800px;
+  animation: ${fadeInUp} 0.6s ease-out 0.1s both;
 `;
 
 const ContentGrid = styled.div`
@@ -49,9 +116,16 @@ const ContentGrid = styled.div`
   gap: 24px;
 `;
 
-const Card = styled.div`
+const Card = styled.div<{ delay?: number }>`
   ${productionCard}
   padding: 32px;
+  animation: ${fadeInUp} 0.6s ease-out ${({ delay }) => delay || 0}ms both;
+  transition: all 0.3s ease;
+  
+  &:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+  }
 `;
 
 const CardHeader = styled.div`
@@ -70,6 +144,7 @@ const CardIcon = styled.div<{ color: string }>`
   align-items: center;
   justify-content: center;
   color: ${({ color }) => color};
+  animation: ${float} 3s ease-in-out infinite;
 `;
 
 const CardTitle = styled.h2`
@@ -88,6 +163,7 @@ const TabContainer = styled.div`
   margin: 0 auto 24px;
   display: flex;
   gap: 12px;
+  animation: ${fadeInUp} 0.6s ease-out 0.2s both;
 `;
 
 const Tab = styled.button<{ $active: boolean }>`
@@ -97,6 +173,7 @@ const Tab = styled.button<{ $active: boolean }>`
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
+  ${props => props.$active && css`animation: ${pulseGlow} 2s ease-in-out infinite;`}
   background: ${props => props.$active 
     ? productionColors.gradients.brand 
     : 'rgba(255, 255, 255, 0.05)'};
@@ -117,10 +194,19 @@ const TwoColumnGrid = styled.div`
   @media (max-width: 1024px) {
     grid-template-columns: 1fr;
   }
+  
+  & > *:nth-child(1) {
+    animation: ${fadeInLeft} 0.6s ease-out 0.3s both;
+  }
+  
+  & > *:nth-child(2) {
+    animation: ${fadeInRight} 0.6s ease-out 0.3s both;
+  }
 `;
 
 const FullWidthSection = styled.div`
   margin-top: 24px;
+  animation: ${scaleIn} 0.6s ease-out 0.4s both;
 `;
 
 const LocationBadge = styled.div`
@@ -134,6 +220,9 @@ const LocationBadge = styled.div`
   gap: 8px;
   color: ${productionColors.text.secondary};
   font-size: 14px;
+  animation: ${fadeInUp} 0.5s ease-out 0.15s both;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 `;
 
 // Additional styled components for enhanced features

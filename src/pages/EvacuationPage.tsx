@@ -100,6 +100,7 @@ const MapCard = styled.div`
   ${productionCard}
   padding: 24px;
   margin-bottom: 24px;
+  min-height: 600px;
 `;
 
 const MapHeader = styled.div`
