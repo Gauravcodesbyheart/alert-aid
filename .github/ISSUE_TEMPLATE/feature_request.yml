@@ -1,0 +1,70 @@
+name: ✨ Feature Request
+description: Suggest a new feature or enhancement
+title: "[Feature]: "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a feature! 💡
+        Your ideas help make Alert-AID better for everyone.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: What problem does this feature solve?
+      placeholder: I'm frustrated when...
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: How would you like this to work?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Any other approaches you've thought about?
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Feature Category
+      options:
+        - 🗺️ Maps & Navigation
+        - 🚨 Alerts & Notifications
+        - 🤖 AI/ML Predictions
+        - 👥 Community Features
+        - 📱 Mobile/PWA
+        - ♿ Accessibility
+        - 🎨 UI/UX Design
+        - 🔧 Backend/API
+        - 📚 Documentation
+        - 🌐 Internationalization
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority (your opinion)
+      options:
+        - 🔴 Critical - Essential for emergency response
+        - 🟠 High - Significantly improves usability
+        - 🟡 Medium - Nice to have
+        - 🟢 Low - Future consideration
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      options:
+        - label: I would like to work on this feature
+        - label: I can help with testing
+        - label: I can help with documentation
