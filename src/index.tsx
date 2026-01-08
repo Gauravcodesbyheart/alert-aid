@@ -4,7 +4,6 @@ import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
 import logger from './utils/logger';
-import Footer from './components/Footer';
 
 // Log app startup
 logger.log('🌟 Alert Aid v2.1.0 - Optimized Build');
@@ -27,7 +26,6 @@ const root = ReactDOM.createRoot(
 root.render(
   <React.StrictMode>
     <App />
-     <Footer />
   </React.StrictMode>
 );
 
