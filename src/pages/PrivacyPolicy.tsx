@@ -18,7 +18,7 @@ const PageWrapper = styled.div`
 const PrivacyPolicy: React.FC = () => (
   <PageWrapper>
     <h1>Privacy Policy</h1>
-    <p><strong>Last updated:</strong> {new Date().toDateString()}</p>
+    <p><strong>Last updated:</strong> 8 January 2026</p>
 
     <p>
       Alert Aid is committed to protecting user privacy while delivering
