@@ -1,19 +1,33 @@
 /**
  * Feature Flag Service
- * Comprehensive feature flag management, targeting, and experimentation
+ * Comprehensive feature flag management, targeting rules, and rollout strategies
  */
 
-// Flag Type
-type FlagType = 'boolean' | 'string' | 'number' | 'json' | 'multivariate';
+// Flag status
+type FlagStatus = 'active' | 'inactive' | 'archived';
 
-// Flag Status
-type FlagStatus = 'active' | 'inactive' | 'archived' | 'scheduled';
+// Flag type
+type FlagType = 'boolean' | 'string' | 'number' | 'json';
 
-// Rollout Strategy
-type RolloutStrategy = 'percentage' | 'user_segment' | 'gradual' | 'ring' | 'random';
+// Rollout strategy
+type RolloutStrategy = 'all' | 'percentage' | 'targeted' | 'gradual' | 'scheduled';
 
-// Targeting Operator
-type TargetingOperator = 'equals' | 'not_equals' | 'contains' | 'not_contains' | 'starts_with' | 'ends_with' | 'matches' | 'in' | 'not_in' | 'gt' | 'lt' | 'gte' | 'lte' | 'exists' | 'not_exists';
+// Targeting operator
+type TargetingOperator = 
+  | 'equals' 
+  | 'not_equals' 
+  | 'contains' 
+  | 'not_contains' 
+  | 'starts_with' 
+  | 'ends_with'
+  | 'greater_than'
+  | 'less_than'
+  | 'in_list'
+  | 'not_in_list'
+  | 'regex';
+
+// Environment
+type Environment = 'development' | 'staging' | 'production';
 
 // Feature Flag
 interface FeatureFlag {
@@ -22,29 +36,36 @@ interface FeatureFlag {
   name: string;
   description: string;
   type: FlagType;
-  project: string;
-  environment: string;
-  defaultValue: FlagValue;
-  variations: FlagVariation[];
-  targeting: FlagTargeting;
-  scheduling: FlagScheduling;
-  rollout: FlagRollout;
-  prerequisites: FlagPrerequisite[];
-  metrics: FlagMetrics;
-  audit: FlagAudit;
-  ownership: FlagOwnership;
   status: FlagStatus;
-  metadata: FlagMetadata;
+  defaultValue: FlagValue;
+  environments: {
+    [K in Environment]: EnvironmentConfig;
+  };
+  tags: string[];
+  owner: {
+    userId: string;
+    userName: string;
+    email: string;
+  };
+  project?: string;
+  prerequisites: {
+    flagKey: string;
+    variation: string;
+  }[];
+  variations: FlagVariation[];
+  metrics: FlagMetrics;
+  audit: FlagAuditEntry[];
+  metadata: {
+    createdAt: Date;
+    createdBy: string;
+    updatedAt: Date;
+    archivedAt?: Date;
+    version: number;
+  };
 }
 
 // Flag Value
-interface FlagValue {
-  type: FlagType;
-  booleanValue?: boolean;
-  stringValue?: string;
-  numberValue?: number;
-  jsonValue?: Record<string, unknown>;
-}
+type FlagValue = boolean | string | number | Record<string, unknown>;
 
 // Flag Variation
 interface FlagVariation {
@@ -53,17 +74,18 @@ interface FlagVariation {
   description?: string;
   value: FlagValue;
   weight?: number;
-  isControl?: boolean;
 }
 
-// Flag Targeting
-interface FlagTargeting {
+// Environment Config
+interface EnvironmentConfig {
   enabled: boolean;
-  rules: TargetingRule[];
   defaultVariation: string;
-  offVariation?: string;
-  userTargeting: UserTargeting;
-  contextTargeting: ContextTargeting;
+  rules: TargetingRule[];
+  rollout: RolloutConfig;
+  schedule?: ScheduleConfig;
+  killSwitch: boolean;
+  lastModified: Date;
+  modifiedBy?: string;
 }
 
 // Targeting Rule
@@ -72,406 +94,51 @@ interface TargetingRule {
   name: string;
   description?: string;
   priority: number;
-  conditions: TargetingCondition[];
+  enabled: boolean;
+  conditions: RuleCondition[];
+  conditionLogic: 'and' | 'or';
   variation: string;
   percentage?: number;
   bucketBy?: string;
-  enabled: boolean;
 }
 
-// Targeting Condition
-interface TargetingCondition {
+// Rule Condition
+interface RuleCondition {
+  id: string;
   attribute: string;
   operator: TargetingOperator;
   value: unknown;
-  values?: unknown[];
   negate?: boolean;
 }
 
-// User Targeting
-interface UserTargeting {
-  enabled: boolean;
-  includedUsers: string[];
-  excludedUsers: string[];
-  userGroups: UserGroup[];
-}
-
-// User Group
-interface UserGroup {
-  id: string;
-  name: string;
-  description?: string;
-  members: string[];
-  variation: string;
-}
-
-// Context Targeting
-interface ContextTargeting {
-  enabled: boolean;
-  contexts: ContextRule[];
-}
-
-// Context Rule
-interface ContextRule {
-  id: string;
-  name: string;
-  contextKind: string;
-  conditions: TargetingCondition[];
-  variation: string;
-}
-
-// Flag Scheduling
-interface FlagScheduling {
-  enabled: boolean;
-  schedules: FlagSchedule[];
-  timezone: string;
-}
-
-// Flag Schedule
-interface FlagSchedule {
-  id: string;
-  name: string;
-  action: 'enable' | 'disable' | 'update';
-  startTime: Date;
-  endTime?: Date;
-  recurrence?: ScheduleRecurrence;
-  variation?: string;
-  executed: boolean;
-  executedAt?: Date;
-}
-
-// Schedule Recurrence
-interface ScheduleRecurrence {
-  frequency: 'daily' | 'weekly' | 'monthly' | 'yearly';
-  interval: number;
-  daysOfWeek?: number[];
-  daysOfMonth?: number[];
-  endAfter?: number;
-  endDate?: Date;
-}
-
-// Flag Rollout
-interface FlagRollout {
+// Rollout Config
+interface RolloutConfig {
   strategy: RolloutStrategy;
-  percentage: number;
-  stages: RolloutStage[];
-  currentStage?: number;
-  bucketBy: string;
-  seed?: number;
-  gradualRollout?: GradualRollout;
-  ringRollout?: RingRollout;
+  percentage?: number;
+  bucketBy?: string;
+  gradual?: {
+    startPercentage: number;
+    endPercentage: number;
+    incrementPercentage: number;
+    intervalMinutes: number;
+    currentPercentage: number;
+    startedAt?: Date;
+    completedAt?: Date;
+  };
+  segments?: string[];
 }
 
-// Rollout Stage
-interface RolloutStage {
-  id: string;
-  name: string;
-  percentage: number;
-  duration: number;
-  criteria?: RolloutCriteria;
-  status: 'pending' | 'active' | 'completed' | 'failed';
-  startedAt?: Date;
-  completedAt?: Date;
-}
-
-// Rollout Criteria
-interface RolloutCriteria {
-  minSampleSize: number;
-  maxErrorRate: number;
-  maxLatencyP95: number;
-  customMetrics?: MetricCriteria[];
-}
-
-// Metric Criteria
-interface MetricCriteria {
-  metric: string;
-  operator: 'gt' | 'lt' | 'eq' | 'gte' | 'lte';
-  threshold: number;
-}
-
-// Gradual Rollout
-interface GradualRollout {
-  initialPercentage: number;
-  increment: number;
-  intervalMinutes: number;
-  targetPercentage: number;
-  currentPercentage: number;
-  pauseOnError: boolean;
-  lastIncrement?: Date;
-}
-
-// Ring Rollout
-interface RingRollout {
-  rings: RolloutRing[];
-  currentRing: number;
-  autoPromote: boolean;
-  promotionDelay: number;
-}
-
-// Rollout Ring
-interface RolloutRing {
-  id: string;
-  name: string;
-  description?: string;
-  percentage: number;
-  targeting?: TargetingRule[];
-  status: 'pending' | 'active' | 'completed';
-  promotedAt?: Date;
-}
-
-// Flag Prerequisite
-interface FlagPrerequisite {
-  flagKey: string;
-  variation: string;
-}
-
-// Flag Metrics
-interface FlagMetrics {
+// Schedule Config
+interface ScheduleConfig {
   enabled: boolean;
-  goals: FlagGoal[];
-  experiments: FlagExperiment[];
-  currentExperiment?: string;
-}
-
-// Flag Goal
-interface FlagGoal {
-  id: string;
-  name: string;
-  description?: string;
-  type: 'conversion' | 'numeric' | 'custom';
-  event: string;
-  successCriteria?: GoalCriteria;
-  baseline?: number;
-  target?: number;
-}
-
-// Goal Criteria
-interface GoalCriteria {
-  minEffect: number;
-  minConfidence: number;
-  direction: 'increase' | 'decrease' | 'any';
-}
-
-// Flag Experiment
-interface FlagExperiment {
-  id: string;
-  name: string;
-  description?: string;
-  hypothesis?: string;
-  status: 'draft' | 'running' | 'paused' | 'completed' | 'cancelled';
-  variations: ExperimentVariation[];
-  traffic: ExperimentTraffic;
-  metrics: ExperimentMetric[];
-  results?: ExperimentResults;
-  scheduling: ExperimentScheduling;
-  metadata: ExperimentMetadata;
-}
-
-// Experiment Variation
-interface ExperimentVariation {
-  variationId: string;
-  name: string;
-  weight: number;
-  isControl: boolean;
-}
-
-// Experiment Traffic
-interface ExperimentTraffic {
-  allocation: number;
-  samplingRate: number;
-  bucketBy: string;
-  seed?: number;
-}
-
-// Experiment Metric
-interface ExperimentMetric {
-  goalId: string;
-  name: string;
-  isPrimary: boolean;
-  minimumSampleSize: number;
-  minimumDetectableEffect: number;
-}
-
-// Experiment Results
-interface ExperimentResults {
-  startDate: Date;
-  endDate?: Date;
-  totalParticipants: number;
-  variationResults: VariationResult[];
-  winner?: string;
-  significance: number;
-  confidence: number;
-  recommendation?: string;
-}
-
-// Variation Result
-interface VariationResult {
-  variationId: string;
-  participants: number;
-  conversions: number;
-  conversionRate: number;
-  improvement?: number;
-  confidence?: number;
-  pValue?: number;
-  isWinner: boolean;
-}
-
-// Experiment Scheduling
-interface ExperimentScheduling {
   startDate?: Date;
   endDate?: Date;
-  minDuration: number;
-  maxDuration?: number;
-  autoStop: boolean;
-  stopCriteria?: StopCriteria;
-}
-
-// Stop Criteria
-interface StopCriteria {
-  minSampleSize: number;
-  minSignificance: number;
-  maxPValue: number;
-}
-
-// Experiment Metadata
-interface ExperimentMetadata {
-  createdAt: Date;
-  createdBy: string;
-  updatedAt: Date;
-  startedAt?: Date;
-  completedAt?: Date;
-  tags: string[];
-}
-
-// Flag Audit
-interface FlagAudit {
-  enabled: boolean;
-  events: FlagAuditEvent[];
-  retentionDays: number;
-}
-
-// Flag Audit Event
-interface FlagAuditEvent {
-  id: string;
-  timestamp: Date;
-  action: 'created' | 'updated' | 'enabled' | 'disabled' | 'archived' | 'targeting_changed' | 'rollout_changed' | 'experiment_started' | 'experiment_stopped';
-  actor: string;
-  actorType: 'user' | 'service' | 'system' | 'schedule';
-  details: Record<string, unknown>;
-  previousValue?: unknown;
-  newValue?: unknown;
-}
-
-// Flag Ownership
-interface FlagOwnership {
-  owner: string;
-  team: string;
-  maintainers: string[];
-  reviewers: string[];
-  stakeholders: string[];
-}
-
-// Flag Metadata
-interface FlagMetadata {
-  createdAt: Date;
-  createdBy: string;
-  updatedAt: Date;
-  updatedBy: string;
-  version: number;
-  tags: string[];
-  labels: Record<string, string>;
-  temporary: boolean;
-  expirationDate?: Date;
-  jiraTicket?: string;
-  documentationUrl?: string;
-}
-
-// Flag Project
-interface FlagProject {
-  id: string;
-  key: string;
-  name: string;
-  description: string;
-  environments: ProjectEnvironment[];
-  defaultEnvironment: string;
-  flags: string[];
-  segments: string[];
-  settings: ProjectSettings;
-  access: ProjectAccess;
-  integrations: ProjectIntegration[];
-  metadata: ProjectMetadata;
-}
-
-// Project Environment
-interface ProjectEnvironment {
-  id: string;
-  key: string;
-  name: string;
-  color: string;
-  type: 'development' | 'staging' | 'production' | 'testing';
-  apiKey: string;
-  clientSideId: string;
-  mobileKey?: string;
-  defaultTTL: number;
-  secureMode: boolean;
-  defaultTrackEvents: boolean;
-  requireComments: boolean;
-  confirmChanges: boolean;
-}
-
-// Project Settings
-interface ProjectSettings {
-  defaultClientSideAvailability: {
-    usingEnvironmentId: boolean;
-    usingMobileKey: boolean;
-  };
-  defaultRelayProxyMode: 'proxy' | 'daemon';
-  requireApproval: boolean;
-  approvalSettings?: ApprovalSettings;
-}
-
-// Approval Settings
-interface ApprovalSettings {
-  required: boolean;
-  minApprovers: number;
-  canReviewOwnRequest: boolean;
-  autoApproveScheduled: boolean;
-  serviceAccounts: string[];
-}
-
-// Project Access
-interface ProjectAccess {
-  owner: string;
-  admins: string[];
-  writers: string[];
-  readers: string[];
-  customRoles: AccessRole[];
-}
-
-// Access Role
-interface AccessRole {
-  id: string;
-  name: string;
-  permissions: string[];
-  members: string[];
-}
-
-// Project Integration
-interface ProjectIntegration {
-  id: string;
-  type: 'slack' | 'jira' | 'github' | 'datadog' | 'webhook' | 'custom';
-  name: string;
-  config: Record<string, unknown>;
-  events: string[];
-  enabled: boolean;
-}
-
-// Project Metadata
-interface ProjectMetadata {
-  createdAt: Date;
-  createdBy: string;
-  updatedAt: Date;
-  tags: string[];
+  timezone: string;
+  windows: {
+    dayOfWeek: number[];
+    startTime: string;
+    endTime: string;
+  }[];
 }
 
 // User Segment
@@ -479,159 +146,222 @@ interface UserSegment {
   id: string;
   key: string;
   name: string;
-  description?: string;
-  project: string;
+  description: string;
+  status: 'active' | 'inactive';
   rules: SegmentRule[];
-  included: string[];
-  excluded: string[];
-  unbounded: boolean;
-  generation: number;
-  version: number;
-  metadata: SegmentMetadata;
+  includedUsers: string[];
+  excludedUsers: string[];
+  estimatedSize: number;
+  lastCalculated: Date;
+  metadata: {
+    createdAt: Date;
+    createdBy: string;
+    updatedAt: Date;
+  };
 }
 
 // Segment Rule
 interface SegmentRule {
   id: string;
-  clauses: SegmentClause[];
-  weight?: number;
-  bucketBy?: string;
-}
-
-// Segment Clause
-interface SegmentClause {
   attribute: string;
   operator: TargetingOperator;
   value: unknown;
-  values?: unknown[];
-  negate: boolean;
-}
-
-// Segment Metadata
-interface SegmentMetadata {
-  createdAt: Date;
-  createdBy: string;
-  updatedAt: Date;
-  tags: string[];
+  weight?: number;
 }
 
 // Flag Evaluation
 interface FlagEvaluation {
+  id: string;
   flagKey: string;
-  value: FlagValue;
-  variationIndex: number;
-  variationId: string;
-  reason: EvaluationReason;
+  environment: Environment;
+  userId?: string;
   context: EvaluationContext;
+  variation: string;
+  value: FlagValue;
+  reason: EvaluationReason;
   timestamp: Date;
-  trackEvents: boolean;
-}
-
-// Evaluation Reason
-interface EvaluationReason {
-  kind: 'OFF' | 'FALLTHROUGH' | 'TARGET_MATCH' | 'RULE_MATCH' | 'PREREQUISITE_FAILED' | 'ERROR';
-  ruleIndex?: number;
-  ruleId?: string;
-  prerequisiteKey?: string;
-  errorKind?: string;
-  inExperiment?: boolean;
+  duration: number;
 }
 
 // Evaluation Context
 interface EvaluationContext {
-  kind: string;
-  key: string;
+  userId?: string;
+  email?: string;
   name?: string;
-  anonymous?: boolean;
-  attributes: Record<string, unknown>;
-  privateAttributes?: string[];
+  country?: string;
+  device?: string;
+  platform?: string;
+  version?: string;
+  custom?: Record<string, unknown>;
 }
 
-// Flag Change Request
-interface FlagChangeRequest {
+// Evaluation Reason
+interface EvaluationReason {
+  kind: 'off' | 'fallthrough' | 'target_match' | 'rule_match' | 'prerequisite_failed' | 'error';
+  ruleId?: string;
+  ruleName?: string;
+  prerequisiteKey?: string;
+  errorKind?: string;
+}
+
+// Flag Metrics
+interface FlagMetrics {
+  evaluations: {
+    total: number;
+    last24h: number;
+    last7d: number;
+    byVariation: Record<string, number>;
+  };
+  users: {
+    unique: number;
+    last24h: number;
+    last7d: number;
+  };
+  errors: {
+    total: number;
+    last24h: number;
+    byType: Record<string, number>;
+  };
+  latency: {
+    avg: number;
+    p50: number;
+    p95: number;
+    p99: number;
+  };
+}
+
+// Flag Audit Entry
+interface FlagAuditEntry {
   id: string;
-  flagKey: string;
-  project: string;
-  environment: string;
-  requestor: ChangeRequestor;
-  changes: FlagChange[];
-  review: ChangeReview;
-  status: 'pending' | 'approved' | 'rejected' | 'applied' | 'cancelled';
-  scheduling?: ChangeScheduling;
-  metadata: ChangeRequestMetadata;
-}
-
-// Change Requestor
-interface ChangeRequestor {
-  id: string;
-  name: string;
-  email: string;
-  reason: string;
-}
-
-// Flag Change
-interface FlagChange {
-  field: string;
-  previousValue: unknown;
-  newValue: unknown;
-  impact?: ChangeImpact;
-}
-
-// Change Impact
-interface ChangeImpact {
-  affectedUsers: number;
-  affectedPercentage: number;
-  riskLevel: 'low' | 'medium' | 'high';
-}
-
-// Change Review
-interface ChangeReview {
-  required: boolean;
-  reviewers: ReviewerInfo[];
-  approvals: ReviewApproval[];
-  comments: ReviewComment[];
-  status: 'pending' | 'approved' | 'rejected';
-}
-
-// Reviewer Info
-interface ReviewerInfo {
-  id: string;
-  name: string;
-  email: string;
-  status: 'pending' | 'approved' | 'rejected';
-}
-
-// Review Approval
-interface ReviewApproval {
-  reviewerId: string;
   timestamp: Date;
-  status: 'approved' | 'rejected';
+  action: 'created' | 'updated' | 'enabled' | 'disabled' | 'archived' | 'rule_added' | 'rule_removed' | 'rollout_changed';
+  actor: {
+    userId: string;
+    userName: string;
+  };
+  environment?: Environment;
+  changes?: {
+    field: string;
+    oldValue: unknown;
+    newValue: unknown;
+  }[];
   comment?: string;
 }
 
-// Review Comment
-interface ReviewComment {
+// Experiment
+interface Experiment {
   id: string;
-  author: string;
-  timestamp: Date;
-  content: string;
-  resolved: boolean;
+  name: string;
+  description: string;
+  flagKey: string;
+  status: 'draft' | 'running' | 'paused' | 'completed' | 'cancelled';
+  hypothesis: string;
+  metric: {
+    name: string;
+    type: 'conversion' | 'numeric' | 'revenue';
+    successCriteria: 'increase' | 'decrease';
+    minimumEffect: number;
+  };
+  variations: {
+    variationId: string;
+    name: string;
+    trafficAllocation: number;
+  }[];
+  audience: {
+    segments: string[];
+    percentage: number;
+  };
+  schedule: {
+    startDate: Date;
+    endDate?: Date;
+    minimumRuntime: number;
+    minimumSampleSize: number;
+  };
+  results?: ExperimentResults;
+  metadata: {
+    createdAt: Date;
+    createdBy: string;
+    updatedAt: Date;
+    startedAt?: Date;
+    completedAt?: Date;
+  };
 }
 
-// Change Scheduling
-interface ChangeScheduling {
-  scheduledAt: Date;
-  timezone: string;
-  autoApply: boolean;
-  notifyBefore: number;
+// Experiment Results
+interface ExperimentResults {
+  status: 'significant' | 'not_significant' | 'inconclusive';
+  winningVariation?: string;
+  confidence: number;
+  sampleSize: number;
+  variations: {
+    variationId: string;
+    sampleSize: number;
+    conversionRate?: number;
+    meanValue?: number;
+    improvement?: number;
+    confidenceInterval: {
+      lower: number;
+      upper: number;
+    };
+  }[];
+  calculatedAt: Date;
 }
 
-// Change Request Metadata
-interface ChangeRequestMetadata {
-  createdAt: Date;
-  updatedAt: Date;
-  appliedAt?: Date;
-  jiraTicket?: string;
+// Flag Template
+interface FlagTemplate {
+  id: string;
+  name: string;
+  description: string;
+  type: FlagType;
+  defaultValue: FlagValue;
+  variations: Omit<FlagVariation, 'id'>[];
+  tags: string[];
+  rules?: Omit<TargetingRule, 'id'>[];
+  metadata: {
+    createdAt: Date;
+    createdBy: string;
+    usageCount: number;
+  };
+}
+
+// Webhook
+interface FlagWebhook {
+  id: string;
+  name: string;
+  url: string;
+  secret?: string;
+  events: ('flag.created' | 'flag.updated' | 'flag.deleted' | 'flag.toggled' | 'experiment.started' | 'experiment.completed')[];
+  environments: Environment[];
+  status: 'active' | 'inactive';
+  headers?: Record<string, string>;
+  retryConfig: {
+    maxRetries: number;
+    retryInterval: number;
+  };
+  metadata: {
+    createdAt: Date;
+    lastTriggered?: Date;
+    successCount: number;
+    failureCount: number;
+  };
+}
+
+// SDK Connection
+interface SDKConnection {
+  id: string;
+  name: string;
+  sdkType: 'server' | 'client' | 'mobile';
+  environment: Environment;
+  apiKey: string;
+  status: 'active' | 'inactive' | 'expired';
+  lastSeen?: Date;
+  version?: string;
+  ip?: string;
+  metadata: {
+    createdAt: Date;
+    createdBy: string;
+    expiresAt?: Date;
+  };
 }
 
 // Feature Flag Statistics
@@ -641,40 +371,41 @@ interface FeatureFlagStatistics {
     activeFlags: number;
     inactiveFlags: number;
     archivedFlags: number;
-    temporaryFlags: number;
-    permanentFlags: number;
-    expiringFlags: number;
   };
-  byType: Record<FlagType, number>;
-  byStatus: Record<FlagStatus, number>;
-  byProject: Record<string, number>;
-  byEnvironment: Record<string, number>;
-  experiments: {
-    active: number;
-    completed: number;
-    paused: number;
-    avgDuration: number;
-    winRate: number;
+  usage: {
+    totalEvaluations: number;
+    evaluationsLast24h: number;
+    evaluationsLast7d: number;
+    uniqueUsers: number;
   };
-  evaluations: {
-    total: number;
-    today: number;
+  performance: {
     avgLatency: number;
+    p95Latency: number;
     errorRate: number;
   };
-  changes: {
-    today: number;
-    thisWeek: number;
-    pendingApproval: number;
+  experiments: {
+    total: number;
+    running: number;
+    completed: number;
+    avgDuration: number;
   };
+  trends: {
+    date: string;
+    evaluations: number;
+    uniqueUsers: number;
+    errors: number;
+  }[];
 }
 
 class FeatureFlagService {
   private static instance: FeatureFlagService;
   private flags: Map<string, FeatureFlag> = new Map();
-  private projects: Map<string, FlagProject> = new Map();
   private segments: Map<string, UserSegment> = new Map();
-  private changeRequests: Map<string, FlagChangeRequest> = new Map();
+  private evaluations: Map<string, FlagEvaluation[]> = new Map();
+  private experiments: Map<string, Experiment> = new Map();
+  private templates: Map<string, FlagTemplate> = new Map();
+  private webhooks: Map<string, FlagWebhook> = new Map();
+  private connections: Map<string, SDKConnection> = new Map();
   private eventListeners: ((event: string, data: unknown) => void)[] = [];
 
   private constructor() {
@@ -693,318 +424,665 @@ class FeatureFlagService {
   }
 
   private initializeSampleData(): void {
-    // Initialize Projects
-    const projectsData = [
-      { key: 'web-app', name: 'Web Application' },
-      { key: 'mobile-app', name: 'Mobile Application' },
-      { key: 'api', name: 'API Services' },
-    ];
-
-    projectsData.forEach((proj, idx) => {
-      const project: FlagProject = {
-        id: `proj-${(idx + 1).toString().padStart(4, '0')}`,
-        key: proj.key,
-        name: proj.name,
-        description: `${proj.name} feature flags`,
-        environments: [
-          { id: 'env-dev', key: 'development', name: 'Development', color: '#4CAF50', type: 'development', apiKey: `dev-${Math.random().toString(36).substr(2, 24)}`, clientSideId: `client-dev-${Math.random().toString(36).substr(2, 16)}`, defaultTTL: 300, secureMode: false, defaultTrackEvents: true, requireComments: false, confirmChanges: false },
-          { id: 'env-stg', key: 'staging', name: 'Staging', color: '#FF9800', type: 'staging', apiKey: `stg-${Math.random().toString(36).substr(2, 24)}`, clientSideId: `client-stg-${Math.random().toString(36).substr(2, 16)}`, defaultTTL: 300, secureMode: false, defaultTrackEvents: true, requireComments: true, confirmChanges: true },
-          { id: 'env-prod', key: 'production', name: 'Production', color: '#F44336', type: 'production', apiKey: `prod-${Math.random().toString(36).substr(2, 24)}`, clientSideId: `client-prod-${Math.random().toString(36).substr(2, 16)}`, defaultTTL: 60, secureMode: true, defaultTrackEvents: true, requireComments: true, confirmChanges: true },
-        ],
-        defaultEnvironment: 'production',
-        flags: [],
-        segments: [],
-        settings: {
-          defaultClientSideAvailability: { usingEnvironmentId: true, usingMobileKey: true },
-          defaultRelayProxyMode: 'proxy',
-          requireApproval: true,
-          approvalSettings: { required: true, minApprovers: 1, canReviewOwnRequest: false, autoApproveScheduled: true, serviceAccounts: [] },
-        },
-        access: { owner: 'admin', admins: ['admin'], writers: ['developers'], readers: ['qa-team'], customRoles: [] },
-        integrations: [
-          { id: 'int-slack', type: 'slack', name: 'Slack Notifications', config: { channel: '#feature-flags' }, events: ['flag_enabled', 'flag_disabled', 'experiment_started'], enabled: true },
-        ],
-        metadata: { createdAt: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000), createdBy: 'admin', updatedAt: new Date(), tags: [proj.key] },
-      };
-      this.projects.set(project.id, project);
-    });
-
-    // Initialize Segments
+    // Initialize User Segments
     const segmentsData = [
-      { key: 'beta-users', name: 'Beta Users' },
-      { key: 'premium-users', name: 'Premium Users' },
-      { key: 'internal-users', name: 'Internal Users' },
+      { key: 'beta-users', name: 'Beta Users', description: 'Users enrolled in beta program' },
+      { key: 'premium-users', name: 'Premium Users', description: 'Users with premium subscription' },
+      { key: 'internal-users', name: 'Internal Users', description: 'Company employees' },
+      { key: 'power-users', name: 'Power Users', description: 'High-engagement users' },
+      { key: 'new-users', name: 'New Users', description: 'Users registered in last 30 days' },
     ];
 
-    segmentsData.forEach((seg, idx) => {
+    segmentsData.forEach((s, idx) => {
       const segment: UserSegment = {
         id: `seg-${(idx + 1).toString().padStart(4, '0')}`,
-        key: seg.key,
-        name: seg.name,
-        description: `${seg.name} segment`,
-        project: 'proj-0001',
+        key: s.key,
+        name: s.name,
+        description: s.description,
+        status: 'active',
         rules: [
-          { id: 'rule-1', clauses: [{ attribute: 'plan', operator: 'equals', value: idx === 1 ? 'premium' : 'beta', negate: false }] },
+          {
+            id: `rule-${idx}-1`,
+            attribute: s.key === 'internal-users' ? 'email' : s.key === 'new-users' ? 'created_at' : 'plan',
+            operator: s.key === 'internal-users' ? 'ends_with' : s.key === 'new-users' ? 'greater_than' : 'equals',
+            value: s.key === 'internal-users' ? '@alertaid.com' : s.key === 'new-users' ? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString() : s.key.replace('-users', ''),
+          },
         ],
-        included: idx === 2 ? ['user-admin', 'user-dev'] : [],
-        excluded: [],
-        unbounded: false,
-        generation: 1,
-        version: 1,
-        metadata: { createdAt: new Date(Date.now() - 180 * 24 * 60 * 60 * 1000), createdBy: 'admin', updatedAt: new Date(), tags: [seg.key] },
+        includedUsers: s.key === 'beta-users' ? ['user-001', 'user-002', 'user-003'] : [],
+        excludedUsers: [],
+        estimatedSize: Math.floor(Math.random() * 5000) + 500,
+        lastCalculated: new Date(),
+        metadata: {
+          createdAt: new Date(Date.now() - 180 * 24 * 60 * 60 * 1000),
+          createdBy: 'admin',
+          updatedAt: new Date(),
+        },
       };
       this.segments.set(segment.id, segment);
     });
 
     // Initialize Feature Flags
     const flagsData = [
-      { key: 'new-dashboard', name: 'New Dashboard', type: 'boolean' as FlagType, status: 'active' as FlagStatus },
-      { key: 'dark-mode', name: 'Dark Mode', type: 'boolean' as FlagType, status: 'active' as FlagStatus },
-      { key: 'checkout-v2', name: 'Checkout V2', type: 'boolean' as FlagType, status: 'active' as FlagStatus },
-      { key: 'search-algorithm', name: 'Search Algorithm', type: 'string' as FlagType, status: 'active' as FlagStatus },
-      { key: 'max-items', name: 'Max Items Per Page', type: 'number' as FlagType, status: 'active' as FlagStatus },
-      { key: 'pricing-experiment', name: 'Pricing Experiment', type: 'multivariate' as FlagType, status: 'active' as FlagStatus },
-      { key: 'recommendations', name: 'Product Recommendations', type: 'boolean' as FlagType, status: 'inactive' as FlagStatus },
-      { key: 'beta-features', name: 'Beta Features', type: 'json' as FlagType, status: 'active' as FlagStatus },
+      { key: 'new-dashboard', name: 'New Dashboard', type: 'boolean', status: 'active' },
+      { key: 'dark-mode', name: 'Dark Mode', type: 'boolean', status: 'active' },
+      { key: 'notification-v2', name: 'Notification V2', type: 'boolean', status: 'active' },
+      { key: 'max-alerts-per-page', name: 'Max Alerts Per Page', type: 'number', status: 'active' },
+      { key: 'api-rate-limit', name: 'API Rate Limit', type: 'number', status: 'active' },
+      { key: 'payment-provider', name: 'Payment Provider', type: 'string', status: 'active' },
+      { key: 'feature-config', name: 'Feature Configuration', type: 'json', status: 'active' },
+      { key: 'beta-features', name: 'Beta Features', type: 'boolean', status: 'active' },
+      { key: 'maintenance-mode', name: 'Maintenance Mode', type: 'boolean', status: 'inactive' },
+      { key: 'legacy-api', name: 'Legacy API', type: 'boolean', status: 'archived' },
     ];
 
-    flagsData.forEach((fg, idx) => {
-      const flagId = `flag-${(idx + 1).toString().padStart(4, '0')}`;
-      const variations: FlagVariation[] = fg.type === 'boolean' ? [
-        { id: 'var-true', name: 'Enabled', value: { type: 'boolean', booleanValue: true }, isControl: false },
-        { id: 'var-false', name: 'Disabled', value: { type: 'boolean', booleanValue: false }, isControl: true },
-      ] : fg.type === 'string' ? [
-        { id: 'var-v1', name: 'Algorithm V1', value: { type: 'string', stringValue: 'v1' }, isControl: true },
-        { id: 'var-v2', name: 'Algorithm V2', value: { type: 'string', stringValue: 'v2' }, isControl: false },
-        { id: 'var-v3', name: 'Algorithm V3', value: { type: 'string', stringValue: 'v3' }, isControl: false },
-      ] : fg.type === 'number' ? [
-        { id: 'var-20', name: '20 Items', value: { type: 'number', numberValue: 20 }, isControl: true },
-        { id: 'var-50', name: '50 Items', value: { type: 'number', numberValue: 50 }, isControl: false },
-        { id: 'var-100', name: '100 Items', value: { type: 'number', numberValue: 100 }, isControl: false },
-      ] : fg.type === 'multivariate' ? [
-        { id: 'var-a', name: 'Plan A', value: { type: 'json', jsonValue: { price: 9.99, features: ['basic'] } }, weight: 33, isControl: true },
-        { id: 'var-b', name: 'Plan B', value: { type: 'json', jsonValue: { price: 14.99, features: ['basic', 'pro'] } }, weight: 33, isControl: false },
-        { id: 'var-c', name: 'Plan C', value: { type: 'json', jsonValue: { price: 19.99, features: ['basic', 'pro', 'enterprise'] } }, weight: 34, isControl: false },
+    const usersData = [
+      { name: 'John Smith', email: 'john.smith@alertaid.com' },
+      { name: 'Sarah Johnson', email: 'sarah.johnson@alertaid.com' },
+      { name: 'Mike Chen', email: 'mike.chen@alertaid.com' },
+    ];
+
+    flagsData.forEach((f, idx) => {
+      const user = usersData[idx % usersData.length];
+      
+      const createEnvironmentConfig = (env: Environment, enabled: boolean): EnvironmentConfig => ({
+        enabled,
+        defaultVariation: 'off',
+        rules: env === 'production' ? [
+          {
+            id: `rule-${f.key}-${env}-1`,
+            name: 'Beta Users Rule',
+            priority: 1,
+            enabled: true,
+            conditions: [
+              {
+                id: `cond-${f.key}-${env}-1`,
+                attribute: 'segment',
+                operator: 'in_list',
+                value: ['beta-users', 'internal-users'],
+              },
+            ],
+            conditionLogic: 'and',
+            variation: 'on',
+          },
+        ] : [],
+        rollout: {
+          strategy: env === 'production' ? 'percentage' : 'all',
+          percentage: env === 'production' ? Math.floor(Math.random() * 50) + 10 : 100,
+          bucketBy: 'userId',
+        },
+        killSwitch: false,
+        lastModified: new Date(),
+        modifiedBy: user.name,
+      });
+
+      const variations: FlagVariation[] = f.type === 'boolean' ? [
+        { id: 'on', name: 'On', value: true },
+        { id: 'off', name: 'Off', value: false },
+      ] : f.type === 'number' ? [
+        { id: 'default', name: 'Default', value: f.key === 'max-alerts-per-page' ? 25 : 100 },
+        { id: 'increased', name: 'Increased', value: f.key === 'max-alerts-per-page' ? 50 : 200 },
+        { id: 'unlimited', name: 'Unlimited', value: -1 },
+      ] : f.type === 'string' ? [
+        { id: 'stripe', name: 'Stripe', value: 'stripe' },
+        { id: 'paypal', name: 'PayPal', value: 'paypal' },
+        { id: 'braintree', name: 'Braintree', value: 'braintree' },
       ] : [
-        { id: 'var-default', name: 'Default', value: { type: 'json', jsonValue: { features: [] } }, isControl: true },
-        { id: 'var-full', name: 'Full Features', value: { type: 'json', jsonValue: { features: ['feature1', 'feature2', 'feature3'] } }, isControl: false },
+        { id: 'default', name: 'Default Config', value: { enabled: true, settings: {} } },
+        { id: 'enhanced', name: 'Enhanced Config', value: { enabled: true, settings: { enhanced: true } } },
       ];
 
       const flag: FeatureFlag = {
-        id: flagId,
-        key: fg.key,
-        name: fg.name,
-        description: `${fg.name} feature flag`,
-        type: fg.type,
-        project: 'proj-0001',
-        environment: 'production',
-        defaultValue: variations[0].value,
+        id: `flag-${(idx + 1).toString().padStart(4, '0')}`,
+        key: f.key,
+        name: f.name,
+        description: `Feature flag for ${f.name.toLowerCase()}`,
+        type: f.type as FlagType,
+        status: f.status as FlagStatus,
+        defaultValue: f.type === 'boolean' ? false : f.type === 'number' ? 0 : f.type === 'string' ? '' : {},
+        environments: {
+          development: createEnvironmentConfig('development', true),
+          staging: createEnvironmentConfig('staging', f.status === 'active'),
+          production: createEnvironmentConfig('production', f.status === 'active' && idx < 5),
+        },
+        tags: [f.type, idx % 2 === 0 ? 'core' : 'experimental'],
+        owner: {
+          userId: `user-${(idx % 3 + 1).toString().padStart(4, '0')}`,
+          userName: user.name,
+          email: user.email,
+        },
+        project: 'alertaid-core',
+        prerequisites: f.key === 'notification-v2' ? [{ flagKey: 'new-dashboard', variation: 'on' }] : [],
         variations,
-        targeting: {
-          enabled: fg.status === 'active',
-          rules: idx < 3 ? [
-            { id: 'rule-1', name: 'Beta Users', priority: 1, conditions: [{ attribute: 'segment', operator: 'in', value: 'beta-users' }], variation: 'var-true', enabled: true },
-          ] : [],
-          defaultVariation: variations[1]?.id || variations[0].id,
-          offVariation: variations.find((v) => v.isControl)?.id,
-          userTargeting: { enabled: idx % 2 === 0, includedUsers: idx === 0 ? ['user-vip'] : [], excludedUsers: [], userGroups: [] },
-          contextTargeting: { enabled: false, contexts: [] },
-        },
-        scheduling: {
-          enabled: idx === 6,
-          schedules: idx === 6 ? [{ id: 'sched-1', name: 'Enable Next Week', action: 'enable', startTime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), executed: false }] : [],
-          timezone: 'UTC',
-        },
-        rollout: {
-          strategy: idx === 5 ? 'gradual' : 'percentage',
-          percentage: fg.status === 'active' ? (idx < 3 ? 100 : 50 + idx * 10) : 0,
-          stages: [],
-          bucketBy: 'key',
-          gradualRollout: idx === 5 ? { initialPercentage: 10, increment: 10, intervalMinutes: 60, targetPercentage: 100, currentPercentage: 50, pauseOnError: true } : undefined,
-        },
-        prerequisites: idx === 2 ? [{ flagKey: 'beta-features', variation: 'var-full' }] : [],
         metrics: {
-          enabled: idx === 5,
-          goals: idx === 5 ? [
-            { id: 'goal-1', name: 'Conversion Rate', type: 'conversion', event: 'purchase', successCriteria: { minEffect: 5, minConfidence: 95, direction: 'increase' } },
-            { id: 'goal-2', name: 'Revenue', type: 'numeric', event: 'revenue', target: 1000 },
-          ] : [],
-          experiments: idx === 5 ? [{
-            id: 'exp-1',
-            name: 'Pricing Test',
-            hypothesis: 'Plan B will increase conversions by 10%',
-            status: 'running',
-            variations: [{ variationId: 'var-a', name: 'Plan A', weight: 33, isControl: true }, { variationId: 'var-b', name: 'Plan B', weight: 33, isControl: false }, { variationId: 'var-c', name: 'Plan C', weight: 34, isControl: false }],
-            traffic: { allocation: 100, samplingRate: 1, bucketBy: 'key' },
-            metrics: [{ goalId: 'goal-1', name: 'Conversion Rate', isPrimary: true, minimumSampleSize: 1000, minimumDetectableEffect: 5 }],
-            results: { startDate: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000), totalParticipants: 5000, variationResults: [{ variationId: 'var-a', participants: 1650, conversions: 165, conversionRate: 10, isWinner: false }, { variationId: 'var-b', participants: 1650, conversions: 198, conversionRate: 12, improvement: 20, confidence: 92, isWinner: true }, { variationId: 'var-c', participants: 1700, conversions: 170, conversionRate: 10, improvement: 0, confidence: 50, isWinner: false }], significance: 92, confidence: 92 },
-            scheduling: { minDuration: 14, autoStop: true, stopCriteria: { minSampleSize: 1000, minSignificance: 95, maxPValue: 0.05 } },
-            metadata: { createdAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000), createdBy: 'product-manager', updatedAt: new Date(), tags: ['pricing'] },
-          }] : [],
-          currentExperiment: idx === 5 ? 'exp-1' : undefined,
+          evaluations: {
+            total: Math.floor(Math.random() * 100000) + 10000,
+            last24h: Math.floor(Math.random() * 5000) + 500,
+            last7d: Math.floor(Math.random() * 30000) + 3000,
+            byVariation: variations.reduce((acc, v) => {
+              acc[v.id] = Math.floor(Math.random() * 50000) + 5000;
+              return acc;
+            }, {} as Record<string, number>),
+          },
+          users: {
+            unique: Math.floor(Math.random() * 10000) + 1000,
+            last24h: Math.floor(Math.random() * 1000) + 100,
+            last7d: Math.floor(Math.random() * 5000) + 500,
+          },
+          errors: {
+            total: Math.floor(Math.random() * 100) + 10,
+            last24h: Math.floor(Math.random() * 10),
+            byType: {
+              'timeout': Math.floor(Math.random() * 20),
+              'invalid_context': Math.floor(Math.random() * 30),
+            },
+          },
+          latency: {
+            avg: Math.random() * 5 + 1,
+            p50: Math.random() * 3 + 0.5,
+            p95: Math.random() * 10 + 5,
+            p99: Math.random() * 20 + 10,
+          },
         },
-        audit: {
-          enabled: true,
-          events: [
-            { id: 'audit-1', timestamp: new Date(), action: 'updated', actor: 'admin', actorType: 'user', details: { rollout: 50 } },
-            { id: 'audit-2', timestamp: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), action: 'enabled', actor: 'admin', actorType: 'user', details: {} },
-          ],
-          retentionDays: 90,
-        },
-        ownership: { owner: 'product-team', team: 'product', maintainers: ['tech-lead'], reviewers: ['qa-lead'], stakeholders: ['pm'] },
-        status: fg.status,
+        audit: [
+          {
+            id: `audit-${f.key}-1`,
+            timestamp: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000),
+            action: 'created',
+            actor: { userId: user.email.split('@')[0], userName: user.name },
+            comment: 'Initial creation',
+          },
+          {
+            id: `audit-${f.key}-2`,
+            timestamp: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+            action: 'enabled',
+            actor: { userId: user.email.split('@')[0], userName: user.name },
+            environment: 'staging',
+          },
+        ],
         metadata: {
-          createdAt: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000),
-          createdBy: 'admin',
+          createdAt: new Date(Date.now() - 180 * 24 * 60 * 60 * 1000),
+          createdBy: user.name,
           updatedAt: new Date(),
-          updatedBy: 'admin',
-          version: 5 + idx,
-          tags: [fg.type, fg.status],
-          labels: { team: 'product' },
-          temporary: idx === 2,
-          expirationDate: idx === 2 ? new Date(Date.now() + 90 * 24 * 60 * 60 * 1000) : undefined,
+          archivedAt: f.status === 'archived' ? new Date() : undefined,
+          version: Math.floor(Math.random() * 10) + 1,
         },
       };
-      this.flags.set(flagId, flag);
+      this.flags.set(flag.id, flag);
+
+      // Generate evaluations for each flag
+      const evaluationsList: FlagEvaluation[] = [];
+      for (let e = 0; e < 20; e++) {
+        const evaluation: FlagEvaluation = {
+          id: `eval-${flag.id}-${e}`,
+          flagKey: flag.key,
+          environment: ['development', 'staging', 'production'][e % 3] as Environment,
+          userId: `user-${(e % 100 + 1).toString().padStart(5, '0')}`,
+          context: {
+            userId: `user-${(e % 100 + 1).toString().padStart(5, '0')}`,
+            email: `user${e % 100 + 1}@example.com`,
+            country: ['US', 'UK', 'CA', 'DE', 'JP'][e % 5],
+            platform: ['web', 'ios', 'android'][e % 3],
+          },
+          variation: variations[e % variations.length].id,
+          value: variations[e % variations.length].value,
+          reason: {
+            kind: e % 5 === 0 ? 'rule_match' : 'fallthrough',
+            ruleId: e % 5 === 0 ? `rule-${flag.key}-production-1` : undefined,
+          },
+          timestamp: new Date(Date.now() - e * 60 * 60 * 1000),
+          duration: Math.random() * 5 + 0.5,
+        };
+        evaluationsList.push(evaluation);
+      }
+      this.evaluations.set(flag.id, evaluationsList);
     });
 
-    // Initialize Change Requests
-    const changeRequest: FlagChangeRequest = {
-      id: 'cr-0001',
-      flagKey: 'new-dashboard',
-      project: 'proj-0001',
-      environment: 'production',
-      requestor: { id: 'dev-1', name: 'Developer', email: 'dev@example.com', reason: 'Roll out to 100% of users' },
-      changes: [{ field: 'rollout.percentage', previousValue: 50, newValue: 100 }],
-      review: {
-        required: true,
-        reviewers: [{ id: 'reviewer-1', name: 'Tech Lead', email: 'lead@example.com', status: 'pending' }],
-        approvals: [],
-        comments: [],
-        status: 'pending',
-      },
-      status: 'pending',
-      metadata: { createdAt: new Date(), updatedAt: new Date() },
-    };
-    this.changeRequests.set(changeRequest.id, changeRequest);
+    // Initialize Experiments
+    const experimentsData = [
+      { name: 'Dashboard Layout Test', flagKey: 'new-dashboard', status: 'running' },
+      { name: 'Dark Mode Adoption', flagKey: 'dark-mode', status: 'completed' },
+      { name: 'Notification Engagement', flagKey: 'notification-v2', status: 'draft' },
+    ];
+
+    experimentsData.forEach((e, idx) => {
+      const flag = Array.from(this.flags.values()).find((f) => f.key === e.flagKey);
+      if (!flag) return;
+
+      const experiment: Experiment = {
+        id: `exp-${(idx + 1).toString().padStart(4, '0')}`,
+        name: e.name,
+        description: `A/B test for ${e.name.toLowerCase()}`,
+        flagKey: e.flagKey,
+        status: e.status as Experiment['status'],
+        hypothesis: `Enabling ${e.flagKey} will improve user engagement`,
+        metric: {
+          name: 'Conversion Rate',
+          type: 'conversion',
+          successCriteria: 'increase',
+          minimumEffect: 5,
+        },
+        variations: flag.variations.map((v, vIdx) => ({
+          variationId: v.id,
+          name: v.name,
+          trafficAllocation: vIdx === 0 ? 50 : 50 / (flag.variations.length - 1),
+        })),
+        audience: {
+          segments: ['beta-users'],
+          percentage: 20,
+        },
+        schedule: {
+          startDate: new Date(Date.now() - (e.status === 'draft' ? 0 : 14) * 24 * 60 * 60 * 1000),
+          endDate: e.status === 'completed' ? new Date() : undefined,
+          minimumRuntime: 14,
+          minimumSampleSize: 1000,
+        },
+        results: e.status === 'completed' ? {
+          status: 'significant',
+          winningVariation: 'on',
+          confidence: 95,
+          sampleSize: 5000,
+          variations: flag.variations.map((v) => ({
+            variationId: v.id,
+            sampleSize: 2500,
+            conversionRate: v.id === 'on' ? 0.12 : 0.08,
+            improvement: v.id === 'on' ? 50 : 0,
+            confidenceInterval: {
+              lower: v.id === 'on' ? 0.10 : 0.06,
+              upper: v.id === 'on' ? 0.14 : 0.10,
+            },
+          })),
+          calculatedAt: new Date(),
+        } : undefined,
+        metadata: {
+          createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+          createdBy: usersData[idx % 3].name,
+          updatedAt: new Date(),
+          startedAt: e.status !== 'draft' ? new Date(Date.now() - 14 * 24 * 60 * 60 * 1000) : undefined,
+          completedAt: e.status === 'completed' ? new Date() : undefined,
+        },
+      };
+      this.experiments.set(experiment.id, experiment);
+    });
+
+    // Initialize Templates
+    const templatesData = [
+      { name: 'Boolean Feature', type: 'boolean' },
+      { name: 'Percentage Rollout', type: 'boolean' },
+      { name: 'Multi-variant Test', type: 'string' },
+    ];
+
+    templatesData.forEach((t, idx) => {
+      const template: FlagTemplate = {
+        id: `tmpl-${(idx + 1).toString().padStart(4, '0')}`,
+        name: t.name,
+        description: `Template for ${t.name.toLowerCase()} flags`,
+        type: t.type as FlagType,
+        defaultValue: t.type === 'boolean' ? false : '',
+        variations: t.type === 'boolean' ? [
+          { name: 'Enabled', value: true },
+          { name: 'Disabled', value: false },
+        ] : [
+          { name: 'Control', value: 'control' },
+          { name: 'Variant A', value: 'variant_a' },
+          { name: 'Variant B', value: 'variant_b' },
+        ],
+        tags: ['template', t.type],
+        rules: t.name === 'Percentage Rollout' ? [
+          {
+            name: 'Gradual Rollout',
+            priority: 1,
+            enabled: true,
+            conditions: [],
+            conditionLogic: 'and',
+            variation: 'on',
+            percentage: 10,
+            bucketBy: 'userId',
+          },
+        ] : undefined,
+        metadata: {
+          createdAt: new Date(Date.now() - 180 * 24 * 60 * 60 * 1000),
+          createdBy: 'admin',
+          usageCount: Math.floor(Math.random() * 50) + 10,
+        },
+      };
+      this.templates.set(template.id, template);
+    });
+
+    // Initialize Webhooks
+    const webhooksData = [
+      { name: 'Slack Notifications', events: ['flag.toggled', 'experiment.completed'] },
+      { name: 'DataDog Metrics', events: ['flag.updated', 'flag.toggled'] },
+    ];
+
+    webhooksData.forEach((w, idx) => {
+      const webhook: FlagWebhook = {
+        id: `hook-${(idx + 1).toString().padStart(4, '0')}`,
+        name: w.name,
+        url: `https://hooks.example.com/${w.name.toLowerCase().replace(' ', '-')}`,
+        events: w.events as FlagWebhook['events'],
+        environments: ['production'],
+        status: 'active',
+        retryConfig: {
+          maxRetries: 3,
+          retryInterval: 60,
+        },
+        metadata: {
+          createdAt: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000),
+          lastTriggered: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000),
+          successCount: Math.floor(Math.random() * 500) + 100,
+          failureCount: Math.floor(Math.random() * 10),
+        },
+      };
+      this.webhooks.set(webhook.id, webhook);
+    });
+
+    // Initialize SDK Connections
+    const connectionsData = [
+      { name: 'Production API', sdkType: 'server', environment: 'production' },
+      { name: 'Mobile App iOS', sdkType: 'mobile', environment: 'production' },
+      { name: 'Web App', sdkType: 'client', environment: 'production' },
+      { name: 'Staging Server', sdkType: 'server', environment: 'staging' },
+    ];
+
+    connectionsData.forEach((c, idx) => {
+      const connection: SDKConnection = {
+        id: `conn-${(idx + 1).toString().padStart(4, '0')}`,
+        name: c.name,
+        sdkType: c.sdkType as SDKConnection['sdkType'],
+        environment: c.environment as Environment,
+        apiKey: `sdk-${c.environment}-${this.generateId()}`,
+        status: 'active',
+        lastSeen: new Date(Date.now() - Math.random() * 60 * 60 * 1000),
+        version: '2.1.0',
+        metadata: {
+          createdAt: new Date(Date.now() - 180 * 24 * 60 * 60 * 1000),
+          createdBy: 'admin',
+        },
+      };
+      this.connections.set(connection.id, connection);
+    });
   }
 
   // Flag Operations
-  public getFlags(project?: string, status?: FlagStatus): FeatureFlag[] {
+  public getFlags(status?: FlagStatus, project?: string): FeatureFlag[] {
     let flags = Array.from(this.flags.values());
-    if (project) flags = flags.filter((f) => f.project === project);
     if (status) flags = flags.filter((f) => f.status === status);
-    return flags;
+    if (project) flags = flags.filter((f) => f.project === project);
+    return flags.sort((a, b) => a.name.localeCompare(b.name));
   }
 
   public getFlagById(id: string): FeatureFlag | undefined {
     return this.flags.get(id);
   }
 
-  public getFlagByKey(key: string, project?: string): FeatureFlag | undefined {
-    return Array.from(this.flags.values()).find(
-      (f) => f.key === key && (!project || f.project === project)
-    );
+  public getFlagByKey(key: string): FeatureFlag | undefined {
+    return Array.from(this.flags.values()).find((f) => f.key === key);
   }
 
-  // Project Operations
-  public getProjects(): FlagProject[] {
-    return Array.from(this.projects.values());
+  public createFlag(data: Partial<FeatureFlag>): FeatureFlag {
+    const flag: FeatureFlag = {
+      id: `flag-${this.generateId()}`,
+      key: data.key || '',
+      name: data.name || '',
+      description: data.description || '',
+      type: data.type || 'boolean',
+      status: 'inactive',
+      defaultValue: data.defaultValue ?? false,
+      environments: {
+        development: { enabled: true, defaultVariation: 'off', rules: [], rollout: { strategy: 'all' }, killSwitch: false, lastModified: new Date() },
+        staging: { enabled: false, defaultVariation: 'off', rules: [], rollout: { strategy: 'all' }, killSwitch: false, lastModified: new Date() },
+        production: { enabled: false, defaultVariation: 'off', rules: [], rollout: { strategy: 'all' }, killSwitch: false, lastModified: new Date() },
+      },
+      tags: data.tags || [],
+      owner: data.owner || { userId: '', userName: '', email: '' },
+      prerequisites: [],
+      variations: data.variations || [
+        { id: 'on', name: 'On', value: true },
+        { id: 'off', name: 'Off', value: false },
+      ],
+      metrics: {
+        evaluations: { total: 0, last24h: 0, last7d: 0, byVariation: {} },
+        users: { unique: 0, last24h: 0, last7d: 0 },
+        errors: { total: 0, last24h: 0, byType: {} },
+        latency: { avg: 0, p50: 0, p95: 0, p99: 0 },
+      },
+      audit: [],
+      metadata: {
+        createdAt: new Date(),
+        createdBy: data.owner?.userName || 'system',
+        updatedAt: new Date(),
+        version: 1,
+      },
+    };
+
+    this.flags.set(flag.id, flag);
+    this.emit('flag.created', flag);
+    return flag;
   }
 
-  public getProjectById(id: string): FlagProject | undefined {
-    return this.projects.get(id);
+  public toggleFlag(id: string, environment: Environment, enabled: boolean): FeatureFlag {
+    const flag = this.flags.get(id);
+    if (!flag) throw new Error('Flag not found');
+
+    flag.environments[environment].enabled = enabled;
+    flag.environments[environment].lastModified = new Date();
+    flag.metadata.updatedAt = new Date();
+
+    this.emit('flag.toggled', { flag, environment, enabled });
+    return flag;
+  }
+
+  public updateRollout(id: string, environment: Environment, rollout: RolloutConfig): FeatureFlag {
+    const flag = this.flags.get(id);
+    if (!flag) throw new Error('Flag not found');
+
+    flag.environments[environment].rollout = rollout;
+    flag.environments[environment].lastModified = new Date();
+    flag.metadata.updatedAt = new Date();
+
+    this.emit('flag.updated', flag);
+    return flag;
+  }
+
+  // Evaluation
+  public evaluate(flagKey: string, context: EvaluationContext, environment: Environment = 'production'): FlagEvaluation {
+    const flag = this.getFlagByKey(flagKey);
+    if (!flag) {
+      return {
+        id: `eval-${this.generateId()}`,
+        flagKey,
+        environment,
+        context,
+        variation: 'off',
+        value: false,
+        reason: { kind: 'error', errorKind: 'FLAG_NOT_FOUND' },
+        timestamp: new Date(),
+        duration: 0,
+      };
+    }
+
+    const envConfig = flag.environments[environment];
+    const startTime = Date.now();
+
+    let variation = envConfig.defaultVariation;
+    let reason: EvaluationReason = { kind: 'fallthrough' };
+
+    if (!envConfig.enabled || envConfig.killSwitch) {
+      reason = { kind: 'off' };
+    } else {
+      // Check targeting rules
+      for (const rule of envConfig.rules) {
+        if (rule.enabled && this.evaluateRule(rule, context)) {
+          variation = rule.variation;
+          reason = { kind: 'rule_match', ruleId: rule.id, ruleName: rule.name };
+          break;
+        }
+      }
+
+      // Apply rollout if no rule matched
+      if (reason.kind === 'fallthrough' && envConfig.rollout.strategy === 'percentage') {
+        const bucket = this.getBucket(context.userId || '', flagKey);
+        if (bucket < (envConfig.rollout.percentage || 0)) {
+          variation = flag.variations.find((v) => v.value === true)?.id || variation;
+        }
+      }
+    }
+
+    const selectedVariation = flag.variations.find((v) => v.id === variation);
+
+    const evaluation: FlagEvaluation = {
+      id: `eval-${this.generateId()}`,
+      flagKey,
+      environment,
+      userId: context.userId,
+      context,
+      variation,
+      value: selectedVariation?.value ?? flag.defaultValue,
+      reason,
+      timestamp: new Date(),
+      duration: Date.now() - startTime,
+    };
+
+    return evaluation;
+  }
+
+  private evaluateRule(rule: TargetingRule, context: EvaluationContext): boolean {
+    const results = rule.conditions.map((condition) => this.evaluateCondition(condition, context));
+    return rule.conditionLogic === 'and' ? results.every(Boolean) : results.some(Boolean);
+  }
+
+  private evaluateCondition(condition: RuleCondition, context: EvaluationContext): boolean {
+    const value = (context as Record<string, unknown>)[condition.attribute] ?? context.custom?.[condition.attribute];
+    let result = false;
+
+    switch (condition.operator) {
+      case 'equals':
+        result = value === condition.value;
+        break;
+      case 'not_equals':
+        result = value !== condition.value;
+        break;
+      case 'contains':
+        result = String(value).includes(String(condition.value));
+        break;
+      case 'in_list':
+        result = Array.isArray(condition.value) && condition.value.includes(value);
+        break;
+      default:
+        result = false;
+    }
+
+    return condition.negate ? !result : result;
+  }
+
+  private getBucket(userId: string, flagKey: string): number {
+    const hash = this.hashString(`${userId}-${flagKey}`);
+    return hash % 100;
+  }
+
+  private hashString(str: string): number {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash;
+    }
+    return Math.abs(hash);
   }
 
   // Segment Operations
-  public getSegments(project?: string): UserSegment[] {
-    let segments = Array.from(this.segments.values());
-    if (project) segments = segments.filter((s) => s.project === project);
-    return segments;
+  public getSegments(): UserSegment[] {
+    return Array.from(this.segments.values());
   }
 
   public getSegmentById(id: string): UserSegment | undefined {
     return this.segments.get(id);
   }
 
-  // Change Request Operations
-  public getChangeRequests(status?: FlagChangeRequest['status']): FlagChangeRequest[] {
-    let requests = Array.from(this.changeRequests.values());
-    if (status) requests = requests.filter((r) => r.status === status);
-    return requests;
+  public getSegmentByKey(key: string): UserSegment | undefined {
+    return Array.from(this.segments.values()).find((s) => s.key === key);
   }
 
-  public getChangeRequestById(id: string): FlagChangeRequest | undefined {
-    return this.changeRequests.get(id);
+  // Experiment Operations
+  public getExperiments(status?: Experiment['status']): Experiment[] {
+    let experiments = Array.from(this.experiments.values());
+    if (status) experiments = experiments.filter((e) => e.status === status);
+    return experiments.sort((a, b) => b.metadata.updatedAt.getTime() - a.metadata.updatedAt.getTime());
   }
 
-  // Evaluation
-  public evaluateFlag(flagKey: string, context: EvaluationContext): FlagEvaluation | undefined {
-    const flag = this.getFlagByKey(flagKey);
-    if (!flag) return undefined;
+  public getExperimentById(id: string): Experiment | undefined {
+    return this.experiments.get(id);
+  }
 
-    const defaultVariation = flag.variations.find((v) => v.id === flag.targeting.defaultVariation) || flag.variations[0];
-    return {
-      flagKey,
-      value: defaultVariation.value,
-      variationIndex: flag.variations.indexOf(defaultVariation),
-      variationId: defaultVariation.id,
-      reason: { kind: flag.targeting.enabled ? 'FALLTHROUGH' : 'OFF' },
-      context,
-      timestamp: new Date(),
-      trackEvents: true,
-    };
+  public startExperiment(id: string): Experiment {
+    const experiment = this.experiments.get(id);
+    if (!experiment) throw new Error('Experiment not found');
+
+    experiment.status = 'running';
+    experiment.metadata.startedAt = new Date();
+    experiment.metadata.updatedAt = new Date();
+
+    this.emit('experiment.started', experiment);
+    return experiment;
+  }
+
+  // Template Operations
+  public getTemplates(): FlagTemplate[] {
+    return Array.from(this.templates.values());
+  }
+
+  public getTemplateById(id: string): FlagTemplate | undefined {
+    return this.templates.get(id);
+  }
+
+  // Webhook Operations
+  public getWebhooks(): FlagWebhook[] {
+    return Array.from(this.webhooks.values());
+  }
+
+  public getWebhookById(id: string): FlagWebhook | undefined {
+    return this.webhooks.get(id);
+  }
+
+  // Connection Operations
+  public getConnections(): SDKConnection[] {
+    return Array.from(this.connections.values());
+  }
+
+  public getConnectionById(id: string): SDKConnection | undefined {
+    return this.connections.get(id);
   }
 
   // Statistics
   public getStatistics(): FeatureFlagStatistics {
     const flags = Array.from(this.flags.values());
-    const experiments = flags.flatMap((f) => f.metrics.experiments || []);
-
-    const byType: Record<FlagType, number> = { boolean: 0, string: 0, number: 0, json: 0, multivariate: 0 };
-    const byStatus: Record<FlagStatus, number> = { active: 0, inactive: 0, archived: 0, scheduled: 0 };
-    const byProject: Record<string, number> = {};
-    const byEnvironment: Record<string, number> = {};
-
-    flags.forEach((f) => {
-      byType[f.type]++;
-      byStatus[f.status]++;
-      byProject[f.project] = (byProject[f.project] || 0) + 1;
-      byEnvironment[f.environment] = (byEnvironment[f.environment] || 0) + 1;
-    });
+    const experiments = Array.from(this.experiments.values());
 
     return {
       overview: {
         totalFlags: flags.length,
-        activeFlags: byStatus.active,
-        inactiveFlags: byStatus.inactive,
-        archivedFlags: byStatus.archived,
-        temporaryFlags: flags.filter((f) => f.metadata.temporary).length,
-        permanentFlags: flags.filter((f) => !f.metadata.temporary).length,
-        expiringFlags: flags.filter((f) => f.metadata.expirationDate && new Date(f.metadata.expirationDate) <= new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)).length,
+        activeFlags: flags.filter((f) => f.status === 'active').length,
+        inactiveFlags: flags.filter((f) => f.status === 'inactive').length,
+        archivedFlags: flags.filter((f) => f.status === 'archived').length,
       },
-      byType,
-      byStatus,
-      byProject,
-      byEnvironment,
+      usage: {
+        totalEvaluations: flags.reduce((sum, f) => sum + f.metrics.evaluations.total, 0),
+        evaluationsLast24h: flags.reduce((sum, f) => sum + f.metrics.evaluations.last24h, 0),
+        evaluationsLast7d: flags.reduce((sum, f) => sum + f.metrics.evaluations.last7d, 0),
+        uniqueUsers: flags.reduce((sum, f) => sum + f.metrics.users.unique, 0),
+      },
+      performance: {
+        avgLatency: flags.reduce((sum, f) => sum + f.metrics.latency.avg, 0) / flags.length,
+        p95Latency: Math.max(...flags.map((f) => f.metrics.latency.p95)),
+        errorRate: flags.reduce((sum, f) => sum + f.metrics.errors.total, 0) / flags.reduce((sum, f) => sum + f.metrics.evaluations.total, 0) * 100,
+      },
       experiments: {
-        active: experiments.filter((e) => e.status === 'running').length,
+        total: experiments.length,
+        running: experiments.filter((e) => e.status === 'running').length,
         completed: experiments.filter((e) => e.status === 'completed').length,
-        paused: experiments.filter((e) => e.status === 'paused').length,
         avgDuration: 14,
-        winRate: 60,
       },
-      evaluations: {
-        total: Math.floor(Math.random() * 10000000),
-        today: Math.floor(Math.random() * 100000),
-        avgLatency: 5,
-        errorRate: 0.01,
-      },
-      changes: {
-        today: 5,
-        thisWeek: 25,
-        pendingApproval: this.changeRequests.size,
-      },
+      trends: [],
     };
   }
 
@@ -1024,71 +1102,30 @@ class FeatureFlagService {
 
 export const featureFlagService = FeatureFlagService.getInstance();
 export type {
-  FlagType,
   FlagStatus,
+  FlagType,
   RolloutStrategy,
   TargetingOperator,
+  Environment,
   FeatureFlag,
   FlagValue,
   FlagVariation,
-  FlagTargeting,
+  EnvironmentConfig,
   TargetingRule,
-  TargetingCondition,
-  UserTargeting,
-  UserGroup,
-  ContextTargeting,
-  ContextRule,
-  FlagScheduling,
-  FlagSchedule,
-  ScheduleRecurrence,
-  FlagRollout,
-  RolloutStage,
-  RolloutCriteria,
-  MetricCriteria,
-  GradualRollout,
-  RingRollout,
-  RolloutRing,
-  FlagPrerequisite,
-  FlagMetrics,
-  FlagGoal,
-  GoalCriteria,
-  FlagExperiment,
-  ExperimentVariation,
-  ExperimentTraffic,
-  ExperimentMetric,
-  ExperimentResults,
-  VariationResult,
-  ExperimentScheduling,
-  StopCriteria,
-  ExperimentMetadata,
-  FlagAudit,
-  FlagAuditEvent,
-  FlagOwnership,
-  FlagMetadata,
-  FlagProject,
-  ProjectEnvironment,
-  ProjectSettings,
-  ApprovalSettings,
-  ProjectAccess,
-  AccessRole,
-  ProjectIntegration,
-  ProjectMetadata,
+  RuleCondition,
+  RolloutConfig,
+  ScheduleConfig,
   UserSegment,
   SegmentRule,
-  SegmentClause,
-  SegmentMetadata,
   FlagEvaluation,
-  EvaluationReason,
   EvaluationContext,
-  FlagChangeRequest,
-  ChangeRequestor,
-  FlagChange,
-  ChangeImpact,
-  ChangeReview,
-  ReviewerInfo,
-  ReviewApproval,
-  ReviewComment,
-  ChangeScheduling,
-  ChangeRequestMetadata,
+  EvaluationReason,
+  FlagMetrics,
+  FlagAuditEntry,
+  Experiment,
+  ExperimentResults,
+  FlagTemplate,
+  FlagWebhook,
+  SDKConnection,
   FeatureFlagStatistics,
 };
