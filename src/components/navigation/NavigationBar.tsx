@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import ManualLocationSearch from '../Location/ManualLocationSearch';
 import ThemeToggle from '../Settings/ThemeToggle';
+import LanguageSelector from '../Settings/LanguageSelector';
 import { 
   productionColors, 
   productionAnimations
@@ -384,7 +385,7 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
     <NavigationContainer>
       <Brand>
         <img 
-          src="/Gemini_Generated_Image_7c3uv87c3uv87c3u.svg" 
+          src="./public/Gemini_Generated_Image_7c3uv87c3uv87c3u.png" 
           alt="Alert Aid Logo" 
           className="brand-logo"
         />
@@ -435,6 +436,7 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
         {isMobileMenuOpen ? <X /> : <Menu />}
       </MobileMenuButton>
       
+      <LanguageSelector />
       <ThemeToggle />
       
       <StarToggleButton

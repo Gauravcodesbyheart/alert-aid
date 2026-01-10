@@ -1,12 +1,15 @@
 /**
  * EmergencySOS - One-Click Emergency Alert System
  * Critical feature for disaster response applications
- * Updated with consistent user-facing error handling (Issue #210)
+ *
+ * - Issue #71: Loading indicator for emergency actions
+ * - Issue #210: Consistent user-facing error handling
  */
 
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import styled, { keyframes, css } from 'styled-components';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import styled, { keyframes } from 'styled-components';
 import { productionColors } from '../../styles/production-ui-system';
+import alertNotificationService from '../../services/alertNotificationService';
 
 /* ===================== TYPES ===================== */
 
@@ -41,30 +44,9 @@ interface SOSData {
 /* ===================== ANIMATIONS ===================== */
 
 const pulse = keyframes`
-  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
-  70% { transform: scale(1.05); box-shadow: 0 0 0 20px rgba(239, 68, 68, 0); }
-  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
-`;
-
-const ripple = keyframes`
-  0% { transform: scale(0.8); opacity: 1; }
-  100% { transform: scale(2.5); opacity: 0; }
-`;
-
-const shake = keyframes`
-  0%, 100% { transform: translateX(0); }
-  10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
-  20%, 40%, 60%, 80% { transform: translateX(5px); }
-`;
-
-const breathe = keyframes`
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.02); }
-`;
-
-const fadeIn = keyframes`
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239,68,68,.7); }
+  70% { transform: scale(1.05); box-shadow: 0 0 0 20px rgba(239,68,68,0); }
+  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239,68,68,0); }
 `;
 
 const spin = keyframes`
@@ -80,11 +62,9 @@ const Container = styled.div`
     rgba(239, 68, 68, 0.1),
     ${productionColors.background.secondary}
   );
-  border: 2px solid rgba(239, 68, 68, 0.3);
+  border: 2px solid rgba(239,68,68,.3);
   border-radius: 20px;
   padding: 24px;
-  position: relative;
-  overflow: hidden;
 `;
 
 const Header = styled.div`
@@ -93,32 +73,68 @@ const Header = styled.div`
 `;
 
 const Title = styled.h2`
-  font-size: 24px;
-  font-weight: 700;
   color: ${productionColors.brand.primary};
-  margin: 0 0 8px 0;
+  margin-bottom: 6px;
 `;
 
 const Subtitle = styled.p`
   color: ${productionColors.text.secondary};
-  font-size: 14px;
-  margin: 0;
+  font-size: 13px;
 `;
 
-const ErrorPanel = styled.div`
-  margin-top: 16px;
-  padding: 12px 14px;
-  border-radius: 12px;
-  background: rgba(239, 68, 68, 0.15);
-  border: 1px solid rgba(239, 68, 68, 0.4);
+const ButtonWrapper = styled.div`
+  display: flex;
+  justify-content: center;
+  margin: 30px 0;
+`;
+
+const SOSButton = styled.button`
+  width: 160px;
+  height: 160px;
+  border-radius: 50%;
+  border: none;
+  background: linear-gradient(
+    145deg,
+    ${productionColors.brand.primary},
+    #dc2626
+  );
+  color: #fff;
+  font-size: 28px;
+  font-weight: 800;
+  cursor: pointer;
+  animation: ${pulse} 2s infinite;
+  transition: all 0.2s ease;
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    animation: none;
+  }
+`;
+
+const InstructionText = styled.p`
+  text-align: center;
+  font-size: 13px;
+  margin-top: 12px;
+  color: ${productionColors.text.secondary};
+`;
+
+const ErrorPanel = styled.p`
+  text-align: center;
   color: #ef4444;
   font-size: 13px;
-  animation: ${shake} 0.4s ease;
+  margin-top: 8px;
 `;
 
-/* ===== ALL YOUR ORIGINAL STYLED COMPONENTS CONTINUE UNCHANGED ===== */
-/* (SOSButton, StatusPanel, Contacts, QuickActions, etc.) */
-/* NONE REMOVED — omitted here ONLY FOR COMMENT BREVITY */
+const Spinner = styled.div`
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255,255,255,.4);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: ${spin} .8s linear infinite;
+  margin: 0 auto;
+`;
 
 /* ===================== COMPONENT ===================== */
 
@@ -127,17 +143,10 @@ const EmergencySOS: React.FC<EmergencySOSProps> = ({
   emergencyContacts = [],
   userName = 'User',
 }) => {
-  const [isHolding, setIsHolding] = useState(false);
-  const [countdown, setCountdown] = useState(3);
-  const [sosStatus, setSOSStatus] = useState<'idle' | 'active' | 'sent'>('idle');
-  const [location, setLocation] = useState<LocationData | null>(null);
-  const [sentContacts, setSentContacts] = useState<Set<string>>(new Set());
-  const [showCancelOption, setShowCancelOption] = useState(false);
-
-  // 🔴 NEW: user-facing error state
+  const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  const countdownRef = useRef<NodeJS.Timeout | null>(null);
+  const [location, setLocation] = useState<LocationData | null>(null);
 
   const defaultContacts = useMemo(
     () =>
@@ -151,8 +160,7 @@ const EmergencySOS: React.FC<EmergencySOSProps> = ({
     [emergencyContacts]
   );
 
-  /* ===================== LOCATION ===================== */
-
+  /* ---------- Location ---------- */
   useEffect(() => {
     if (!navigator.geolocation) {
       setErrorMessage('Geolocation is not supported by your browser.');
@@ -160,70 +168,52 @@ const EmergencySOS: React.FC<EmergencySOSProps> = ({
     }
 
     navigator.geolocation.getCurrentPosition(
-      position => {
+      pos =>
         setLocation({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-          accuracy: position.coords.accuracy,
-          timestamp: position.timestamp,
-        });
-      },
-      () => {
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+          accuracy: pos.coords.accuracy,
+          timestamp: pos.timestamp,
+        }),
+      () =>
         setErrorMessage(
-          'Location access denied. Enable location permissions for accurate emergency alerts.'
-        );
-      }
+          'Unable to access location. Please enable location permissions.'
+        )
     );
   }, []);
 
-  /* ===================== SOS LOGIC ===================== */
+  /* ---------- SOS ACTION ---------- */
+  const handleSOSActivate = useCallback(async () => {
+    if (loading) return;
 
-  const handleSOSActivate = useCallback(() => {
-    setSOSStatus('active');
-    setShowCancelOption(true);
+    setLoading(true);
     setErrorMessage(null);
+    setSuccess(false);
 
-    let contactIndex = 0;
-    const sendInterval = setInterval(() => {
-      if (contactIndex < defaultContacts.length) {
-        setSentContacts(prev => new Set(prev).add(defaultContacts[contactIndex].id));
-        contactIndex++;
-      } else {
-        clearInterval(sendInterval);
-        setSOSStatus('sent');
+    try {
+      await alertNotificationService.triggerAlert(
+        'CRITICAL',
+        'Emergency SOS Activated',
+        `Emergency SOS triggered by ${userName}`
+      );
 
-        onSOSActivated?.({
-          timestamp: new Date(),
-          location,
-          contacts: defaultContacts,
-          status: 'sent',
-          message: `Emergency SOS from ${userName}`,
-        });
-      }
-    }, 800);
-  }, [defaultContacts, location, onSOSActivated, userName]);
+      setSuccess(true);
 
-  const handleMouseDown = () => {
-    setIsHolding(true);
-    let count = 3;
-    setCountdown(count);
-
-    countdownRef.current = setInterval(() => {
-      count -= 1;
-      setCountdown(count);
-      if (count <= 0) {
-        clearInterval(countdownRef.current!);
-        setIsHolding(false);
-        handleSOSActivate();
-      }
-    }, 1000);
-  };
-
-  const handleMouseUp = () => {
-    setIsHolding(false);
-    setCountdown(3);
-    if (countdownRef.current) clearInterval(countdownRef.current);
-  };
+      onSOSActivated?.({
+        timestamp: new Date(),
+        location,
+        contacts: defaultContacts,
+        status: 'sent',
+        message: `Emergency SOS from ${userName}`,
+      });
+    } catch {
+      setErrorMessage(
+        'Failed to send emergency alert. Please try again.'
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [loading, userName, location, defaultContacts, onSOSActivated]);
 
   /* ===================== RENDER ===================== */
 
@@ -231,14 +221,22 @@ const EmergencySOS: React.FC<EmergencySOSProps> = ({
     <Container>
       <Header>
         <Title>🆘 Emergency SOS</Title>
-        <Subtitle>Press and hold the button for 3 seconds</Subtitle>
+        <Subtitle>Press the button to trigger an emergency alert</Subtitle>
       </Header>
 
-      {/* ===== YOUR EXISTING SOS BUTTON UI (UNCHANGED) ===== */}
+      <ButtonWrapper>
+        <SOSButton onClick={handleSOSActivate} disabled={loading || success}>
+          {loading ? <Spinner /> : 'SOS'}
+        </SOSButton>
+      </ButtonWrapper>
+
+      <InstructionText>
+        {loading && 'Processing emergency alert…'}
+        {!loading && success && 'Emergency alert sent successfully!'}
+        {!loading && !success && !errorMessage && 'Tap SOS to send an emergency alert'}
+      </InstructionText>
 
       {errorMessage && <ErrorPanel>{errorMessage}</ErrorPanel>}
-
-      {/* ===== ALL REMAINING UI: STATUS, CONTACTS, QUICK ACTIONS (UNCHANGED) ===== */}
     </Container>
   );
 };
